@@ -92,28 +92,15 @@ const AdminPanel: React.FC = () => {
     try {
       setIsLoading(true);
 
-      // Fetch students and all profiles in parallel
-      const [studentRecords, allProfiles] = await Promise.all([
-        studentsDB.getAll(),
-        profilesDB.getAll()
-      ]);
+      // Backend already populates user_id with profile data
+      const studentRecords = await studentsDB.getAll();
 
-      console.log('Student records:', studentRecords);
-      console.log('All profiles:', allProfiles);
+      // Map user_id (which is already populated) to profile for consistency
+      const studentsWithProfiles = studentRecords.map((student) => ({
+        ...student,
+        profile: (student.user_id as any as Profile) || null
+      }));
 
-      // Create a profile lookup map by _id
-      const profileMap = new Map();
-      allProfiles.forEach((profile) => {
-        profileMap.set(profile._id, profile);
-      });
-
-      // Match students with their profiles
-      const studentsWithProfiles = studentRecords.map((student) => {
-        const profile = profileMap.get(student.user_id);
-        return { ...student, profile: profile || null };
-      });
-
-      console.log('Students with profiles:', studentsWithProfiles);
       setStudents(studentsWithProfiles);
       setFilteredStudents(studentsWithProfiles);
     } catch (error) {
@@ -422,28 +409,53 @@ const AdminPanel: React.FC = () => {
                           <TableHead>Email</TableHead>
                           <TableHead>Registration No.</TableHead>
                           <TableHead>Resume Status</TableHead>
+                          <TableHead>Company Applied</TableHead>
                           <TableHead>Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredStudents.map((student) => (
-                          <TableRow key={student._id}>
-                            <TableCell className="font-medium">{student.profile?.name || 'No name'}</TableCell>
-                            <TableCell>{student.profile?.email || 'No email'}</TableCell>
-                            <TableCell>{student.registration_number || 'N/A'}</TableCell>
-                            <TableCell>
-                              <span className={`px-2 py-1 rounded text-xs ${student.resume_status === 'approved' ? 'bg-green-100 text-green-800' : student.resume_status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                                {student.resume_status || 'pending'}
-                              </span>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex gap-2">
-                                <Button variant="ghost" size="sm" onClick={() => handleEditStudent(student)}><Edit className="h-4 w-4" /></Button>
-                                <Button variant="ghost" size="sm" onClick={() => handleDeleteStudent(student)}><Trash className="h-4 w-4 text-red-500" /></Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {filteredStudents.map((student) => {
+                          // Find companies this student has applied to
+                          const studentApplications = applications.filter(
+                            (app: any) => app.student_id === student._id
+                          );
+                          const appliedCompanies = studentApplications.map((app: any) => {
+                            const company = companies.find((c: any) => c._id === app.company_id);
+                            return company?.name || 'Unknown';
+                          });
+
+                          return (
+                            <TableRow key={student._id}>
+                              <TableCell className="font-medium">{student.profile?.name || 'No name'}</TableCell>
+                              <TableCell>{student.profile?.email || 'No email'}</TableCell>
+                              <TableCell>{student.registration_number || 'N/A'}</TableCell>
+                              <TableCell>
+                                <span className={`px-2 py-1 rounded text-xs ${student.resume_status === 'approved' ? 'bg-green-100 text-green-800' : student.resume_status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                  {student.resume_status || 'pending'}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                {appliedCompanies.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {appliedCompanies.map((companyName, idx) => (
+                                      <span key={idx} className="px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">
+                                        {companyName}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">Not applied</span>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex gap-2">
+                                  <Button variant="ghost" size="sm" onClick={() => handleEditStudent(student)}><Edit className="h-4 w-4" /></Button>
+                                  <Button variant="ghost" size="sm" onClick={() => handleDeleteStudent(student)}><Trash className="h-4 w-4 text-red-500" /></Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   )}
@@ -560,8 +572,8 @@ const AdminPanel: React.FC = () => {
                                   </TableCell>
                                   <TableCell>
                                     <span className={`px-2 py-1 rounded text-xs ${app.status === 'accepted' ? 'bg-green-100 text-green-800' :
-                                        app.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                                          'bg-yellow-100 text-yellow-800'
+                                      app.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                                        'bg-yellow-100 text-yellow-800'
                                       }`}>
                                       {app.status}
                                     </span>
@@ -612,8 +624,8 @@ const AdminPanel: React.FC = () => {
                                 <TableCell>{student.registration_number || 'N/A'}</TableCell>
                                 <TableCell>
                                   <span className={`px-2 py-1 rounded text-xs ${student.resume_status === 'approved' ? 'bg-green-100 text-green-800' :
-                                      student.resume_status === 'rejected' ? 'bg-red-100 text-red-800' :
-                                        'bg-yellow-100 text-yellow-800'
+                                    student.resume_status === 'rejected' ? 'bg-red-100 text-red-800' :
+                                      'bg-yellow-100 text-yellow-800'
                                     }`}>
                                     {student.resume_status || 'pending'}
                                   </span>

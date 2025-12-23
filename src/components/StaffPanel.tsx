@@ -61,23 +61,14 @@ const StaffPanel: React.FC = () => {
     try {
       setIsLoading(true);
 
-      // Fetch students and all profiles in parallel
-      const [studentRecords, allProfiles] = await Promise.all([
-        studentsDB.getAll(),
-        profilesDB.getAll()
-      ]);
+      // Backend already populates user_id with profile data
+      const studentRecords = await studentsDB.getAll();
 
-      // Create a profile lookup map by _id
-      const profileMap = new Map();
-      allProfiles.forEach((profile) => {
-        profileMap.set(profile._id, profile);
-      });
-
-      // Match students with their profiles
-      const studentsWithProfiles = studentRecords.map((student) => {
-        const profile = profileMap.get(student.user_id);
-        return { ...student, profile: profile || null };
-      });
+      // Map user_id (which is already populated) to profile for consistency
+      const studentsWithProfiles = studentRecords.map(student => ({
+        ...student,
+        profile: (student.user_id as any as Profile) || null
+      }));
 
       setStudents(studentsWithProfiles);
       setFilteredStudents(studentsWithProfiles);
