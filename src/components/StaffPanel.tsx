@@ -24,7 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Edit, Trash, Search, X, CheckCircle, XCircle, FileText } from "lucide-react";
+import { Plus, Edit, Trash, Search, X, CheckCircle, XCircle, FileText, Printer } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -78,6 +78,76 @@ const StaffPanel: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Print student list
+  const handlePrintStudents = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Student List Report</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 20px; color: #000; }
+          h1 { text-align: center; color: #1e40af; margin-bottom: 10px; }
+          .subtitle { text-align: center; color: #666; margin-bottom: 20px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+          th { background-color: #1e40af; color: white; font-weight: bold; }
+          tr:nth-child(even) { background-color: #f9fafb; }
+          .footer { margin-top: 30px; text-align: center; color: #666; font-size: 12px; }
+          .status { text-transform: capitalize; padding: 4px 8px; border-radius: 4px; font-size: 11px; }
+          .status-approved { background-color: #dcfce7; color: #166534; }
+          .status-rejected { background-color: #fee2e2; color: #991b1b; }
+          .status-pending { background-color: #fef3c7; color: #92400e; }
+        </style>
+      </head>
+      <body>
+        <h1>Student List Report</h1>
+        <div class="subtitle">Generated on: ${new Date().toLocaleString()}</div>
+        <div class="subtitle">Total Students: ${filteredStudents.length}</div>
+        <table>
+          <thead>
+            <tr>
+              <th>S.No</th>
+              <th>Student Name</th>
+              <th>Email</th>
+              <th>Registration No.</th>
+              <th>Resume Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filteredStudents.map((student: any, index: number) => `
+              <tr>
+                <td>${index + 1}</td>
+                <td>${student.profile?.name || 'No name'}</td>
+                <td>${student.profile?.email || 'No email'}</td>
+                <td>${student.registration_number || 'N/A'}</td>
+                <td>
+                  <span class="status status-${student.resume_status || 'pending'}">
+                    ${student.resume_status || 'pending'}
+                  </span>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <div class="footer">
+          <p>This is a computer-generated document. No signature required.</p>
+          <p>© ${new Date().getFullYear()} Student Career Portal</p>
+        </div>
+        <script>
+          window.onload = function() { window.print(); }
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(printContent);
+    printWindow.document.close();
   };
 
   useEffect(() => {
@@ -295,12 +365,17 @@ const StaffPanel: React.FC = () => {
                 <CardHeader className="flex flex-row items-center justify-between">
                   <div>
                     <CardTitle>Students</CardTitle>
-                    <CardDescription>Manage student registrations and records</CardDescription>
+                    <CardDescription>Manage student registrations and review resumes</CardDescription>
                   </div>
-                  <Button onClick={handleAddStudent} variant="default" size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Student
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button onClick={handlePrintStudents} variant="outline" size="sm" className="gap-2">
+                      <Printer className="h-4 w-4" />
+                      Print List
+                    </Button>
+                    <Button onClick={handleAddStudent} size="sm">
+                      <Plus className="h-4 w-4 mr-2" /> Add Student
+                    </Button>
+                  </div>
                 </CardHeader>
 
                 <CardContent>
