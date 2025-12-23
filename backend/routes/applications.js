@@ -3,6 +3,7 @@ const router = express.Router();
 const Application = require('../models/Application');
 const Student = require('../models/Student');
 const Company = require('../models/Company');
+const Profile = require('../models/Profile');
 
 // Create new application
 router.post('/', async (req, res) => {
@@ -32,7 +33,13 @@ router.post('/', async (req, res) => {
 router.get('/', async (req, res) => {
     try {
         const applications = await Application.find()
-            .populate('student_id')
+            .populate({
+                path: 'student_id',
+                populate: {
+                    path: 'user_id',
+                    model: 'Profile'
+                }
+            })
             .populate('company_id')
             .sort({ applied_at: -1 });
         res.json(applications);

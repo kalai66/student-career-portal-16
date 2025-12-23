@@ -417,11 +417,10 @@ const AdminPanel: React.FC = () => {
                         {filteredStudents.map((student) => {
                           // Find companies this student has applied to
                           const studentApplications = applications.filter(
-                            (app: any) => app.student_id === student._id
+                            (app: any) => app.student_id?._id === student._id
                           );
                           const appliedCompanies = studentApplications.map((app: any) => {
-                            const company = companies.find((c: any) => c._id === app.company_id);
-                            return company?.name || 'Unknown';
+                            return app.company_id?.name || 'Unknown';
                           });
 
                           return (
@@ -478,7 +477,7 @@ const AdminPanel: React.FC = () => {
                     <CardHeader className="pb-3">
                       <CardDescription>Students Applied</CardDescription>
                       <CardTitle className="text-3xl text-green-600">
-                        {new Set(applications.map((app: any) => app.student_id)).size}
+                        {new Set(applications.map((app: any) => app.student_id?._id).filter(Boolean)).size}
                       </CardTitle>
                     </CardHeader>
                   </Card>
@@ -486,7 +485,7 @@ const AdminPanel: React.FC = () => {
                     <CardHeader className="pb-3">
                       <CardDescription>Students Not Applied</CardDescription>
                       <CardTitle className="text-3xl text-orange-600">
-                        {students.length - new Set(applications.map((app: any) => app.student_id)).size}
+                        {students.length - new Set(applications.map((app: any) => app.student_id?._id).filter(Boolean)).size}
                       </CardTitle>
                     </CardHeader>
                   </Card>
@@ -554,19 +553,20 @@ const AdminPanel: React.FC = () => {
                         <TableBody>
                           {applications
                             .filter((app: any) =>
-                              selectedCompanyFilter === 'all' || app.company_id === selectedCompanyFilter
+                              selectedCompanyFilter === 'all' || app.company_id?._id === selectedCompanyFilter
                             )
                             .map((app: any) => {
-                              const student = students.find((s: any) => s._id === app.student_id);
-                              const company = companies.find((c: any) => c._id === app.company_id);
+                              // Backend populates student_id with full Student object including user_id (Profile)
+                              const studentProfile = app.student_id?.user_id;
+                              const companyName = app.company_id?.name;
                               return (
                                 <TableRow key={app._id}>
                                   <TableCell className="font-medium">
-                                    {student?.profile?.name || 'Unknown'}
+                                    {studentProfile?.name || 'Unknown'}
                                   </TableCell>
-                                  <TableCell>{student?.profile?.email || 'N/A'}</TableCell>
-                                  <TableCell>{student?.registration_number || 'N/A'}</TableCell>
-                                  <TableCell>{company?.name || 'Unknown'}</TableCell>
+                                  <TableCell>{studentProfile?.email || 'N/A'}</TableCell>
+                                  <TableCell>{app.student_id?.registration_number || 'N/A'}</TableCell>
+                                  <TableCell>{companyName || 'Unknown'}</TableCell>
                                   <TableCell>
                                     {new Date(app.applied_at).toLocaleDateString()}
                                   </TableCell>
@@ -595,7 +595,10 @@ const AdminPanel: React.FC = () => {
                   </CardHeader>
                   <CardContent>
                     {(() => {
-                      const appliedStudentIds = new Set(applications.map((app: any) => app.student_id));
+                      // Since backend populates student_id, extract the _id
+                      const appliedStudentIds = new Set(
+                        applications.map((app: any) => app.student_id?._id).filter(Boolean)
+                      );
                       const notAppliedStudents = students.filter(
                         (student: any) => !appliedStudentIds.has(student._id)
                       );
