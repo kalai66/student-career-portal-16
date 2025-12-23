@@ -24,7 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Edit, Trash, Search, X } from "lucide-react";
+import { Plus, Edit, Trash, Search, X, Printer } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -129,6 +129,85 @@ const AdminPanel: React.FC = () => {
     } catch (error) {
       console.error('Error fetching companies:', error);
     }
+  };
+
+  // Print applications list
+  const handlePrintApplications = () => {
+    const filteredApps = applications.filter((app: any) =>
+      selectedCompanyFilter === 'all' || app.company_id?._id === selectedCompanyFilter
+    );
+
+    const companyName = selectedCompanyFilter === 'all'
+      ? 'All Companies'
+      : companies.find(c => c._id === selectedCompanyFilter)?.name || 'Unknown';
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Student Applications - ${companyName}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 20px; color: #000; }
+          h1 { text-align: center; color: #1e40af; margin-bottom: 10px; }
+          .subtitle { text-align: center; color: #666; margin-bottom: 20px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+          th { background-color: #1e40af; color: white; font-weight: bold; }
+          tr:nth-child(even) { background-color: #f9fafb; }
+          .footer { margin-top: 30px; text-align: center; color: #666; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <h1>Student Applications Report</h1>
+        <div class="subtitle">Company: ${companyName}</div>
+        <div class="subtitle">Generated on: ${new Date().toLocaleString()}</div>
+        <div class="subtitle">Total Applications: ${filteredApps.length}</div>
+        <table>
+          <thead>
+            <tr>
+              <th>S.No</th>
+              <th>Student Name</th>
+              <th>Email</th>
+              <th>Registration No.</th>
+              <th>Company</th>
+              <th>Applied Date</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filteredApps.map((app: any, index: number) => {
+      const studentProfile = app.student_id?.user_id;
+      const companyName = app.company_id?.name;
+      return `
+                <tr>
+                  <td>${index + 1}</td>
+                  <td>${studentProfile?.name || 'Unknown'}</td>
+                  <td>${studentProfile?.email || 'N/A'}</td>
+                  <td>${app.student_id?.registration_number || 'N/A'}</td>
+                  <td>${companyName || 'Unknown'}</td>
+                  <td>${new Date(app.applied_at).toLocaleDateString()}</td>
+                  <td style="text-transform: capitalize;">${app.status}</td>
+                </tr>
+              `;
+    }).join('')}
+          </tbody>
+        </table>
+        <div class="footer">
+          <p>This is a computer-generated document. No signature required.</p>
+          <p>© ${new Date().getFullYear()} Student Career Portal</p>
+        </div>
+        <script>
+          window.onload = function() { window.print(); }
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(printContent);
+    printWindow.document.close();
   };
 
   useEffect(() => {
@@ -525,11 +604,24 @@ const AdminPanel: React.FC = () => {
                 {/* Applied Students List */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-green-700">Applied Students</CardTitle>
-                    <CardDescription>
-                      Students who have applied to companies
-                      {selectedCompanyFilter !== 'all' && ` (Filtered by ${companies.find(c => c._id === selectedCompanyFilter)?.name})`}
-                    </CardDescription>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-green-700">Applied Students</CardTitle>
+                        <CardDescription>
+                          Students who have applied to companies
+                          {selectedCompanyFilter !== 'all' && ` (Filtered by ${companies.find(c => c._id === selectedCompanyFilter)?.name})`}
+                        </CardDescription>
+                      </div>
+                      <Button
+                        onClick={handlePrintApplications}
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                      >
+                        <Printer className="h-4 w-4" />
+                        Print List
+                      </Button>
+                    </div>
                   </CardHeader>
                   <CardContent>
                     {applications.filter((app: any) =>
