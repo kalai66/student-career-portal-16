@@ -533,7 +533,7 @@ const AdminPanel: React.FC = () => {
                   </CardHeader>
                   <CardContent>
                     {applications.filter((app: any) =>
-                      selectedCompanyFilter === 'all' || app.company_id === selectedCompanyFilter
+                      selectedCompanyFilter === 'all' || app.company_id?._id === selectedCompanyFilter
                     ).length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
                         No applications found
@@ -591,21 +591,40 @@ const AdminPanel: React.FC = () => {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-orange-700">Students Not Applied</CardTitle>
-                    <CardDescription>Students who haven't applied to any company yet</CardDescription>
+                    <CardDescription>
+                      {selectedCompanyFilter === 'all'
+                        ? "Students who haven't applied to any company yet"
+                        : `Students who haven't applied to ${companies.find(c => c._id === selectedCompanyFilter)?.name}`}
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     {(() => {
-                      // Since backend populates student_id, extract the _id
-                      const appliedStudentIds = new Set(
-                        applications.map((app: any) => app.student_id?._id).filter(Boolean)
-                      );
-                      const notAppliedStudents = students.filter(
-                        (student: any) => !appliedStudentIds.has(student._id)
-                      );
+                      let notAppliedStudents;
+
+                      if (selectedCompanyFilter === 'all') {
+                        const appliedStudentIds = new Set(
+                          applications.map((app: any) => app.student_id?._id).filter(Boolean)
+                        );
+                        notAppliedStudents = students.filter(
+                          (student: any) => !appliedStudentIds.has(student._id)
+                        );
+                      } else {
+                        const appliedToThisCompanyIds = new Set(
+                          applications
+                            .filter((app: any) => app.company_id?._id === selectedCompanyFilter)
+                            .map((app: any) => app.student_id?._id)
+                            .filter(Boolean)
+                        );
+                        notAppliedStudents = students.filter(
+                          (student: any) => !appliedToThisCompanyIds.has(student._id)
+                        );
+                      }
 
                       return notAppliedStudents.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
-                          All students have applied!
+                          {selectedCompanyFilter === 'all'
+                            ? 'All students have applied!'
+                            : 'All students have applied to this company!'}
                         </div>
                       ) : (
                         <Table>
