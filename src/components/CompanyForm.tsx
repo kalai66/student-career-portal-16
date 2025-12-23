@@ -1,76 +1,44 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { 
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { toast } from '@/components/ui/use-toast';
-import { Company } from '../data/mockData';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '../integrations/supabase/client';
+import { companiesDB } from '@/lib/dbHelpers';
+import { Company } from '@/lib/dbHelpers';
 
 interface CompanyFormProps {
-  isOpen: boolean;
   onClose: () => void;
-  onSave: (company: Partial<Company>) => void;
-  company?: Company | null;  // Made null possible to match usage
+  company?: Company | null;
 }
 
-const CompanyForm: React.FC<CompanyFormProps> = ({
-  isOpen,
-  onClose,
-  onSave,
-  company
-}) => {
+const CompanyForm: React.FC<CompanyFormProps> = ({ onClose, company }) => {
   const { currentUser } = useAuth();
-  const [formData, setFormData] = useState<Partial<Company>>(
-    company || {
-      name: '',
-      description: '',
-      location: '',
-      positions: [],
-      requirements: [],
-      deadline: new Date().toISOString().split('T')[0],
-      posted_by: currentUser?.id || '',
-    }
-  );
-  
-  // Update form data when company prop changes
-  useEffect(() => {
-    if (company) {
-      // Ensure positions and requirements are arrays
-      const positions = Array.isArray(company.positions) ? company.positions : [];
-      const requirements = Array.isArray(company.requirements) ? company.requirements : [];
-      
-      setFormData({
-        ...company,
-        positions,
-        requirements
-      });
-    } else {
-      setFormData({
-        name: '',
-        description: '',
-        location: '',
-        positions: [],
-        requirements: [],
-        deadline: new Date().toISOString().split('T')[0],
-        posted_by: currentUser?.id || '',
-      });
-    }
-  }, [company, currentUser]);
-  
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    location: '',
+    deadline: new Date().toISOString().split('T')[0],
+  });
   const [newPosition, setNewPosition] = useState('');
   const [newRequirement, setNewRequirement] = useState('');
+  const [positions, setPositions] = useState<string[]>([]);
+  const [requirements, setRequirements] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (company) {
+      setFormData({
+        name: company.name,
+        description: company.description,
+        location: company.location,
+        deadline: company.deadline,
+      });
+      setPositions(company.positions || []);
+      setRequirements(company.requirements || []);
+    }
+  }, [company]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -79,46 +47,30 @@ const CompanyForm: React.FC<CompanyFormProps> = ({
 
   const handleAddPosition = () => {
     if (newPosition.trim()) {
-      const currentPositions = Array.isArray(formData.positions) ? formData.positions : [];
-      setFormData({
-        ...formData,
-        positions: [...currentPositions, newPosition.trim()]
-      });
+      setPositions([...positions, newPosition.trim()]);
       setNewPosition('');
     }
   };
 
   const handleAddRequirement = () => {
     if (newRequirement.trim()) {
-      const currentRequirements = Array.isArray(formData.requirements) ? formData.requirements : [];
-      setFormData({
-        ...formData,
-        requirements: [...currentRequirements, newRequirement.trim()]
-      });
+      setRequirements([...requirements, newRequirement.trim()]);
       setNewRequirement('');
     }
   };
 
   const handleRemovePosition = (index: number) => {
-    if (formData.positions) {
-      const updatedPositions = [...formData.positions];
-      updatedPositions.splice(index, 1);
-      setFormData({ ...formData, positions: updatedPositions });
-    }
+    setPositions(positions.filter((_, i) => i !== index));
   };
 
   const handleRemoveRequirement = (index: number) => {
-    if (formData.requirements) {
-      const updatedRequirements = [...formData.requirements];
-      updatedRequirements.splice(index, 1);
-      setFormData({ ...formData, requirements: updatedRequirements });
-    }
+    setRequirements(requirements.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = () => {
-    // Basic validation
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
     if (!formData.name || !formData.description || !formData.location || !formData.deadline) {
-      console.log("Missing required fields", formData);
       toast({
         title: "Error",
         description: "Please fill in all required fields",
@@ -127,185 +79,175 @@ const CompanyForm: React.FC<CompanyFormProps> = ({
       return;
     }
 
-    // Ensure positions and requirements are arrays and not empty
-    const positions = Array.isArray(formData.positions) ? formData.positions : [];
-    const requirements = Array.isArray(formData.requirements) ? formData.requirements : [];
-    
-    if (positions.length === 0 || requirements.length === 0) {
-      console.log("Positions or requirements are empty");
+    if (positions.length === 0) {
       toast({
         title: "Error",
-        description: "Please add at least one position and one requirement",
+        description: "Please add at least one position",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (requirements.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please add at least one requirement",
         variant: "destructive"
       });
       return;
     }
 
     setIsSubmitting(true);
-    
+
     try {
-      // Prepare data with arrays
-      const finalData = {
+      const companyData = {
         ...formData,
         positions,
         requirements,
-        // Make sure to remove any ID if this is a new company (to avoid uuid errors)
-        ...(company ? {} : { id: undefined }),
-        // Set a default poster ID if none is provided
-        posted_by: formData.posted_by || currentUser?.id || 'system'
+        posted_by: currentUser?._id || '',
       };
-      
-      // Pass the data back to parent component
-      onSave(finalData);
+
+      if (company) {
+        // Update existing company
+        await companiesDB.update(company._id, companyData);
+        toast({
+          title: "Success",
+          description: "Company updated successfully"
+        });
+      } else {
+        // Create new company
+        await companiesDB.create(companyData);
+        toast({
+          title: "Success",
+          description: "Company created successfully"
+        });
+      }
+
+      onClose();
     } catch (error) {
-      console.error('Error submitting form:', error);
+      console.error('Error saving company:', error);
       toast({
         title: "Error",
-        description: "Failed to submit form. Please try again.",
+        description: "Failed to save company",
         variant: "destructive"
       });
+    } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Handle Enter key in position and requirement inputs
-  const handlePositionKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleAddPosition();
-    }
-  };
-
-  const handleRequirementKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleAddRequirement();
-    }
-  };
-
   return (
-    <div>
-      <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>{company ? 'Edit Company' : 'Add New Company'}</DialogTitle>
-            <DialogDescription>
-              {company ? 'Update company information in the system.' : 'Add a new company to the recruitment system.'}
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="name">Company Name *</Label>
-              <Input 
-                id="name" 
-                name="name" 
-                value={formData.name || ''} 
-                onChange={handleInputChange}
-                required
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="location">Location *</Label>
-              <Input 
-                id="location" 
-                name="location" 
-                value={formData.location || ''} 
-                onChange={handleInputChange}
-                required 
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="description">Description *</Label>
-              <Textarea 
-                id="description" 
-                name="description" 
-                value={formData.description || ''} 
-                onChange={handleInputChange} 
-                rows={3}
-                required
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label>Positions *</Label>
-              <div className="flex gap-2">
-                <Input 
-                  value={newPosition} 
-                  onChange={(e) => setNewPosition(e.target.value)}
-                  onKeyDown={handlePositionKeyDown}
-                  placeholder="Add a position"
-                />
-                <Button type="button" onClick={handleAddPosition} className="shrink-0">
-                  Add
-                </Button>
-              </div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {formData.positions?.map((position, index) => (
-                  <div key={index} className="bg-secondary text-secondary-foreground px-3 py-1 rounded-md flex items-center gap-2">
-                    {position}
-                    <button 
-                      onClick={() => handleRemovePosition(index)}
-                      className="text-secondary-foreground/70 hover:text-secondary-foreground"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <Label>Requirements *</Label>
-              <div className="flex gap-2">
-                <Input 
-                  value={newRequirement} 
-                  onChange={(e) => setNewRequirement(e.target.value)}
-                  onKeyDown={handleRequirementKeyDown}
-                  placeholder="Add a requirement"
-                />
-                <Button type="button" onClick={handleAddRequirement} className="shrink-0">
-                  Add
-                </Button>
-              </div>
-              <div className="mt-2 flex flex-col gap-2">
-                {formData.requirements?.map((requirement, index) => (
-                  <div key={index} className="bg-secondary text-secondary-foreground px-3 py-1 rounded-md flex items-center justify-between">
-                    <span>{requirement}</span>
-                    <button 
-                      onClick={() => handleRemoveRequirement(index)}
-                      className="text-secondary-foreground/70 hover:text-secondary-foreground"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="deadline">Application Deadline *</Label>
-              <Input 
-                id="deadline" 
-                name="deadline" 
-                type="date"
-                value={formData.deadline || ''} 
-                onChange={handleInputChange}
-                required 
-              />
-            </div>
+    <div className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="name">Company Name *</Label>
+          <Input
+            id="name"
+            name="name"
+            value={formData.name}
+            onChange={handleInputChange}
+            required
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="location">Location *</Label>
+          <Input
+            id="location"
+            name="location"
+            value={formData.location}
+            onChange={handleInputChange}
+            required
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="description">Description *</Label>
+          <Textarea
+            id="description"
+            name="description"
+            value={formData.description}
+            onChange={handleInputChange}
+            rows={3}
+            required
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label>Positions *</Label>
+          <div className="flex gap-2">
+            <Input
+              value={newPosition}
+              onChange={(e) => setNewPosition(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddPosition())}
+              placeholder="Add a position"
+            />
+            <Button type="button" onClick={handleAddPosition}>Add</Button>
           </div>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting}>
-              {isSubmitting ? "Saving..." : company ? 'Update Company' : 'Add Company'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {positions.map((position, index) => (
+              <div key={index} className="bg-secondary px-3 py-1 rounded-md flex items-center gap-2">
+                {position}
+                <button
+                  type="button"
+                  onClick={() => handleRemovePosition(index)}
+                  className="hover:text-destructive"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Requirements *</Label>
+          <div className="flex gap-2">
+            <Input
+              value={newRequirement}
+              onChange={(e) => setNewRequirement(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddRequirement())}
+              placeholder="Add a requirement"
+            />
+            <Button type="button" onClick={handleAddRequirement}>Add</Button>
+          </div>
+          <div className="mt-2 flex flex-col gap-2">
+            {requirements.map((requirement, index) => (
+              <div key={index} className="bg-secondary px-3 py-1 rounded-md flex items-center justify-between">
+                <span>{requirement}</span>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveRequirement(index)}
+                  className="hover:text-destructive"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="deadline">Application Deadline *</Label>
+          <Input
+            id="deadline"
+            name="deadline"
+            type="date"
+            value={formData.deadline}
+            onChange={handleInputChange}
+            required
+          />
+        </div>
+
+        <div className="flex justify-end gap-2 pt-4">
+          <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? "Saving..." : company ? 'Update Company' : 'Add Company'}
+          </Button>
+        </div>
+      </form>
     </div>
   );
 };

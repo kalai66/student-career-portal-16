@@ -25,7 +25,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Edit, Trash, Search, X } from "lucide-react";
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import NavBar from './NavBar';
 import AdminPanel from './AdminPanel';
@@ -40,151 +39,70 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-
-// Define the Admin interface to fix the typing issue
-interface Admin {
-  id: string;
-  name: string;
-  email?: string;
-  role: string;
-  created_at: string;
-}
-
-// Define type for auth user to fix 'never' issues
-interface AuthUser {
-  id: string;
-  email?: string;
-}
+import { profilesDB } from '@/lib/dbHelpers';
+import { Profile } from '@/lib/auth';
 
 const SuperAdminPanel: React.FC = () => {
   const { currentUser } = useAuth();
   const { toast } = useToast();
-  const [adminUsers, setAdminUsers] = useState<Admin[]>([]);
-  const [filteredAdmins, setFilteredAdmins] = useState<Admin[]>([]);
+  const [adminUsers, setAdminUsers] = useState<Profile[]>([]);
+  const [filteredAdmins, setFilteredAdmins] = useState<Profile[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isAddAdminDialogOpen, setIsAddAdminDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [currentAdmin, setCurrentAdmin] = useState<Admin | null>(null);
+  const [currentAdmin, setCurrentAdmin] = useState<Profile | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
   });
   const [activeTab, setActiveTab] = useState('dashboard');
-  
+
   const fetchAdmins = async () => {
     try {
       setIsLoading(true);
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('role', 'admin');
-        
-      if (error) {
-        console.error('Error fetching admins:', error);
-        toast({
-          title: "Error",
-          description: `Failed to fetch admin users: ${error.message}`,
-          variant: "destructive"
-        });
-        return;
-      }
-      
-      // Correctly type the data from Supabase to match our Admin interface
-      const profileData = data as Admin[];
-      
-      // If we have auth data, try to merge in email info
-      try {
-        const { data: authData, error: authError } = await supabase.auth.admin.listUsers();
-        
-        if (authError) {
-          console.error('Error fetching auth users:', authError);
-          // Continue with the profiles data we have
-          setAdminUsers(profileData);
-          setFilteredAdmins(profileData);
-          return;
-        }
-        
-        let enrichedAdmins = profileData;
-        if (authData && authData.users) {
-          const authUsers = authData.users as unknown as AuthUser[];
-          enrichedAdmins = profileData.map(admin => {
-            const authUser = authUsers.find(user => user.id === admin.id);
-            return {
-              ...admin,
-              email: authUser?.email || 'No email found'
-            };
-          });
-        }
-        
-        setAdminUsers(enrichedAdmins);
-        setFilteredAdmins(enrichedAdmins);
-      } catch (error) {
-        console.error('Error enriching admin data:', error);
-        // Fall back to just using profile data
-        setAdminUsers(profileData);
-        setFilteredAdmins(profileData);
-      }
+      const admins = await profilesDB.getByRole('admin');
+      setAdminUsers(admins);
+      setFilteredAdmins(admins);
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error fetching admins:', error);
       toast({
         title: "Error",
-        description: "An unexpected error occurred while fetching admins",
+        description: "Failed to fetch admin users",
         variant: "destructive"
       });
     } finally {
       setIsLoading(false);
     }
   };
-  
+
   React.useEffect(() => {
     fetchAdmins();
-    
-    // Set up real-time subscription for admin changes
-    const adminSubscription = supabase
-      .channel('admin-changes')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'profiles',
-          filter: 'role=eq.admin' 
-        }, 
-        () => {
-          console.log('Admin profiles changed, refreshing data');
-          fetchAdmins();
-        }
-      )
-      .subscribe();
-      
-    return () => {
-      adminSubscription.unsubscribe();
-    };
   }, []);
-  
+
   // Filter admins based on search term
   React.useEffect(() => {
     if (searchTerm.trim() === '') {
       setFilteredAdmins(adminUsers);
       return;
     }
-    
-    const filtered = adminUsers.filter(admin => 
-      admin.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      admin.email.toLowerCase().includes(searchTerm.toLowerCase())
+
+    const filtered = adminUsers.filter(admin =>
+      admin.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (admin.email && admin.email.toLowerCase().includes(searchTerm.toLowerCase()))
     );
-    
+
     setFilteredAdmins(filtered);
   }, [searchTerm, adminUsers]);
-  
+
   const handleAddAdmin = () => {
     setCurrentAdmin(null);
     setFormData({ name: '', email: '', password: '' });
     setIsAddAdminDialogOpen(true);
   };
-  
-  const handleEditAdmin = (admin: Admin) => {
+
+  const handleEditAdmin = (admin: Profile) => {
     setCurrentAdmin(admin);
     setFormData({
       name: admin.name,
@@ -193,22 +111,22 @@ const SuperAdminPanel: React.FC = () => {
     });
     setIsAddAdminDialogOpen(true);
   };
-  
-  const handleDeleteAdmin = (admin: Admin) => {
+
+  const handleDeleteAdmin = (admin: Profile) => {
     setCurrentAdmin(admin);
     setIsDeleteDialogOpen(true);
   };
-  
+
   const resetFormState = () => {
     setCurrentAdmin(null);
     setFormData({ name: '', email: '', password: '' });
     setIsAddAdminDialogOpen(false);
     setIsDeleteDialogOpen(false);
   };
-  
+
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.name.trim()) {
       toast({
         title: "Error",
@@ -217,7 +135,7 @@ const SuperAdminPanel: React.FC = () => {
       });
       return;
     }
-    
+
     // Email validation
     if (!formData.email || !formData.email.includes('@')) {
       toast({
@@ -237,105 +155,47 @@ const SuperAdminPanel: React.FC = () => {
       });
       return;
     }
-    
+
     try {
       // If editing an existing admin
       if (currentAdmin) {
         // Update the profile
-        const { error } = await supabase
-          .from('profiles')
-          .update({
-            name: formData.name,
-            email: formData.email
-          })
-          .eq('id', currentAdmin.id);
-          
-        if (error) {
-          console.error('Error updating admin:', error);
-          toast({
-            title: "Error",
-            description: `Failed to update admin. ${error.message}`,
-            variant: "destructive"
-          });
-          return;
-        }
-        
+        await profilesDB.update(currentAdmin._id, {
+          name: formData.name,
+          email: formData.email
+        });
+
         // If password is provided, update it
         if (formData.password) {
-          const { error: authError } = await supabase.auth.admin.updateUserById(
-            currentAdmin.id,
-            { password: formData.password }
-          );
-          
-          if (authError) {
-            console.error('Error updating password:', authError);
-            toast({
-              title: "Warning",
-              description: `Admin updated but password could not be changed. ${authError.message}`,
-              variant: "destructive"
-            });
-          }
+          const { updatePassword } = await import('@/lib/auth');
+          await updatePassword(currentAdmin._id, formData.password);
         }
-        
+
         toast({
           title: "Admin Updated",
           description: `${formData.name}'s profile has been updated.`,
         });
       } else {
         // Create a new admin user
-        // First create auth user
-        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        await profilesDB.create({
           email: formData.email,
           password: formData.password,
-          email_confirm: true,
-          user_metadata: {
-            name: formData.name,
-            role: 'admin'
-          }
+          name: formData.name,
+          role: 'admin'
         });
-        
-        if (authError || !authData.user) {
-          console.error('Error creating admin user:', authError || 'No user returned');
-          toast({
-            title: "Error",
-            description: `Failed to create admin account. ${authError?.message || 'Unknown error'}`,
-            variant: "destructive"
-          });
-          return;
-        }
-        
-        // Create profile record
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert({
-            id: authData.user.id,
-            name: formData.name,
-            email: formData.email,
-            role: 'admin'
-          });
-          
-        if (profileError) {
-          console.error('Error creating profile:', profileError);
-          toast({
-            title: "Error",
-            description: `Failed to create admin profile. ${profileError.message}`,
-            variant: "destructive"
-          });
-          return;
-        }
-        
+
         toast({
           title: "Admin Created",
-          description: `${formData.name} has been added as an admin with login credentials.`,
+          description: `${formData.name} has been added as an admin.`,
         });
       }
-      
+
       // Close the form and reset state
       resetFormState();
-      
+
       // Refresh admin list
       fetchAdmins();
-      
+
     } catch (error) {
       console.error('Error:', error);
       toast({
@@ -345,49 +205,25 @@ const SuperAdminPanel: React.FC = () => {
       });
     }
   };
-  
+
   const confirmDeleteAdmin = async () => {
     if (!currentAdmin) return;
-    
+
     try {
-      // Delete auth user first
-      const { error: authError } = await supabase.auth.admin.deleteUser(
-        currentAdmin.id
-      );
-      
-      if (authError) {
-        console.error('Error deleting auth user:', authError);
-        // Continue anyway as we still want to delete the profile
-      }
-      
-      // Delete from profiles table
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', currentAdmin.id);
-        
-      if (profileError) {
-        console.error('Error deleting profile:', profileError);
-        toast({
-          title: "Error",
-          description: `Failed to delete admin profile. ${profileError.message}`,
-          variant: "destructive"
-        });
-        return;
-      }
-      
+      await profilesDB.delete(currentAdmin._id);
+
       toast({
         title: "Admin Deleted",
         description: `${currentAdmin.name} has been removed.`,
         variant: "destructive"
       });
-      
+
       // Close the dialog and reset state
       resetFormState();
-      
+
       // Refresh admin list
       fetchAdmins();
-      
+
     } catch (error) {
       console.error('Error:', error);
       toast({
@@ -410,18 +246,18 @@ const SuperAdminPanel: React.FC = () => {
   return (
     <div className="panel-container">
       <NavBar title="Campus Recruitment - Super Admin Panel" />
-      
+
       <div className="container mx-auto py-8 space-y-6">
         <h1 className="text-3xl font-bold">Super Admin Dashboard</h1>
-        
+
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full md:w-auto grid-cols-4">
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             <TabsTrigger value="admins">Admin Management</TabsTrigger>
             <TabsTrigger value="companies">Company Management</TabsTrigger>
-            <TabsTrigger value="system">System Management</TabsTrigger>
+            <TabsTrigger value="staff">Staff Management</TabsTrigger>
           </TabsList>
-          
+
           <div className="mt-6">
             <TabsContent value="dashboard">
               <Card>
@@ -436,7 +272,7 @@ const SuperAdminPanel: React.FC = () => {
                 </CardContent>
               </Card>
             </TabsContent>
-            
+
             <TabsContent value="admins">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
@@ -446,7 +282,7 @@ const SuperAdminPanel: React.FC = () => {
                     Add Admin
                   </Button>
                 </CardHeader>
-                
+
                 <CardContent>
                   <div className="mb-4 flex items-center gap-2">
                     <div className="relative flex-grow">
@@ -458,7 +294,7 @@ const SuperAdminPanel: React.FC = () => {
                         className="pl-8"
                       />
                       {searchTerm && (
-                        <button 
+                        <button
                           className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                           onClick={() => setSearchTerm('')}
                         >
@@ -467,7 +303,7 @@ const SuperAdminPanel: React.FC = () => {
                       )}
                     </div>
                   </div>
-                  
+
                   {isLoading ? (
                     <div className="text-center py-4">Loading...</div>
                   ) : filteredAdmins.length === 0 ? (
@@ -487,21 +323,21 @@ const SuperAdminPanel: React.FC = () => {
                         </TableHeader>
                         <TableBody>
                           {filteredAdmins.map((admin) => (
-                            <TableRow key={admin.id}>
+                            <TableRow key={admin._id}>
                               <TableCell className="font-medium">{admin.name}</TableCell>
                               <TableCell>{admin.email}</TableCell>
                               <TableCell>{admin.created_at ? formatDate(admin.created_at) : 'N/A'}</TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-2">
-                                  <Button 
-                                    variant="ghost" 
-                                    size="sm" 
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
                                     onClick={() => handleEditAdmin(admin)}
                                   >
                                     <Edit className="h-4 w-4" />
                                   </Button>
-                                  <Button 
-                                    variant="ghost" 
+                                  <Button
+                                    variant="ghost"
                                     size="sm"
                                     onClick={() => handleDeleteAdmin(admin)}
                                   >
@@ -518,17 +354,17 @@ const SuperAdminPanel: React.FC = () => {
                 </CardContent>
               </Card>
             </TabsContent>
-            
+
             <TabsContent value="companies">
               <CompanyManager />
             </TabsContent>
-            
-            <TabsContent value="system">
+
+            <TabsContent value="staff">
               <Card>
                 <CardHeader>
-                  <CardTitle>System Overview</CardTitle>
+                  <CardTitle>Staff Management</CardTitle>
                   <CardDescription>
-                    Access the full system functionality below
+                    Manage staff accounts and permissions
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -538,7 +374,7 @@ const SuperAdminPanel: React.FC = () => {
             </TabsContent>
           </div>
         </Tabs>
-        
+
         {/* Add Admin Dialog */}
         <Dialog open={isAddAdminDialogOpen} onOpenChange={setIsAddAdminDialogOpen}>
           <DialogContent>
@@ -547,45 +383,45 @@ const SuperAdminPanel: React.FC = () => {
                 {currentAdmin ? 'Edit Admin' : 'Add New Admin'}
               </DialogTitle>
               <DialogDescription>
-                {currentAdmin 
+                {currentAdmin
                   ? 'Update admin information'
                   : 'Enter the details for the new admin user'}
               </DialogDescription>
             </DialogHeader>
-            
+
             <form onSubmit={handleFormSubmit}>
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="name">Name</Label>
-                  <Input 
+                  <Input
                     id="name"
                     value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="Enter admin name"
                   />
                 </div>
-                
+
                 <div>
                   <Label htmlFor="email">Email</Label>
-                  <Input 
+                  <Input
                     id="email"
                     type="email"
                     value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     placeholder="Enter admin email"
                     required
                   />
                 </div>
-                
+
                 <div>
                   <Label htmlFor="password">
                     {currentAdmin ? "Password (leave blank to keep current)" : "Password"}
                   </Label>
-                  <Input 
+                  <Input
                     id="password"
                     type="password"
                     value={formData.password}
-                    onChange={(e) => setFormData({...formData, password: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     placeholder={currentAdmin ? "••••••••" : "Enter password"}
                     required={!currentAdmin}
                   />
@@ -596,11 +432,11 @@ const SuperAdminPanel: React.FC = () => {
                   )}
                 </div>
               </div>
-              
+
               <DialogFooter className="mt-4">
-                <Button 
-                  type="button" 
-                  variant="outline" 
+                <Button
+                  type="button"
+                  variant="outline"
                   onClick={resetFormState}
                 >
                   Cancel
@@ -612,7 +448,7 @@ const SuperAdminPanel: React.FC = () => {
             </form>
           </DialogContent>
         </Dialog>
-        
+
         {/* Delete Confirmation Dialog */}
         <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
           <DialogContent>
@@ -622,18 +458,18 @@ const SuperAdminPanel: React.FC = () => {
                 Are you sure you want to delete admin {currentAdmin?.name}? This action cannot be undone.
               </DialogDescription>
             </DialogHeader>
-            
+
             <DialogFooter>
-              <Button 
+              <Button
                 type="button"
                 variant="outline"
                 onClick={resetFormState}
               >
                 Cancel
               </Button>
-              <Button 
-                type="button" 
-                variant="destructive" 
+              <Button
+                type="button"
+                variant="destructive"
                 onClick={confirmDeleteAdmin}
               >
                 Delete

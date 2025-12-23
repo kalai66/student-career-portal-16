@@ -1,0 +1,18 @@
+[
+  {
+    "_id": "676785a9b1234567890abe01",
+    "user_id": "676785a9b1234567890abcd4",
+    "resume_url": null,
+    "resume_status": "pending",
+    "registration_number": "STU2024001",
+    "created_at": "2024-12-22T10:00:00.000Z"
+  },
+  {
+    "_id": "676785a9b1234567890abe02",
+    "user_id": "676785a9b1234567890abcd5",
+    "resume_url": "https://example.com/resumes/sarah-johnson.pdf",
+    "resume_status": "approved",
+    "registration_number": "STU2024002",
+    "created_at": "2024-12-22T11:00:00.000Z"
+  }
+]

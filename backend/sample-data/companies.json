@@ -1,0 +1,59 @@
+[
+  {
+    "_id": "676785a9b1234567890abf01",
+    "name": "Tech Corp",
+    "description": "Leading technology company offering innovative solutions",
+    "location": "San Francisco, CA",
+    "deadline": "2024-12-31",
+    "posted_by": "676785a9b1234567890abcd3",
+    "positions": [
+      "Software Engineer",
+      "Data Analyst",
+      "DevOps Engineer"
+    ],
+    "requirements": [
+      "Bachelor's degree in Computer Science",
+      "2+ years of experience",
+      "Strong problem-solving skills"
+    ],
+    "created_at": "2024-12-22T10:00:00.000Z"
+  },
+  {
+    "_id": "676785a9b1234567890abf02",
+    "name": "Innovation Labs",
+    "description": "Innovative startup focused on AI and machine learning",
+    "location": "New York, NY",
+    "deadline": "2024-11-30",
+    "posted_by": "676785a9b1234567890abcd2",
+    "positions": [
+      "Frontend Developer",
+      "UI/UX Designer"
+    ],
+    "requirements": [
+      "Portfolio required",
+      "React experience",
+      "Knowledge of modern design principles"
+    ],
+    "created_at": "2024-12-22T10:30:00.000Z"
+  },
+  {
+    "_id": "676785a9b1234567890abf03",
+    "name": "Global Systems Inc",
+    "description": "Enterprise software solutions provider",
+    "location": "Austin, TX",
+    "deadline": "2025-01-15",
+    "posted_by": "676785a9b1234567890abcd6",
+    "positions": [
+      "Full Stack Developer",
+      "Cloud Architect",
+      "QA Engineer"
+    ],
+    "requirements": [
+      "Master's degree preferred",
+      "3+ years experience",
+      "AWS/Azure certification",
+      "Agile methodology knowledge"
+    ],
+    "created_at": "2024-12-22T12:00:00.000Z"
+  }
+]

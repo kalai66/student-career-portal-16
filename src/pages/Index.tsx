@@ -29,7 +29,7 @@ const Index: React.FC = () => {
       return <StaffPanel />;
     case UserRole.STUDENT:
       // Students can only access the student panel with their assigned ID
-      return <StudentPanel studentId={currentUser.id} />;
+      return <StudentPanel />;
     default:
       return <Login />;
   }

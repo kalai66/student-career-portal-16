@@ -1,0 +1,50 @@
+[
+    {
+        "_id": "676785a9b1234567890abcd1",
+        "name": "Super Admin",
+        "email": "blue67388@gmail.com",
+        "password": "superadmin@123",
+        "role": "super_admin",
+        "created_at": "2024-12-22T10:00:00.000Z"
+    },
+    {
+        "_id": "676785a9b1234567890abcd2",
+        "name": "Admin User",
+        "email": "achu73220@gmail.com",
+        "password": "admin@123",
+        "role": "admin",
+        "created_at": "2024-12-22T10:00:00.000Z"
+    },
+    {
+        "_id": "676785a9b1234567890abcd3",
+        "name": "Staff Member",
+        "email": "staff@example.com",
+        "password": "staff123",
+        "role": "staff",
+        "created_at": "2024-12-22T10:00:00.000Z"
+    },
+    {
+        "_id": "676785a9b1234567890abcd4",
+        "name": "John Student",
+        "email": "student@example.com",
+        "password": "student123",
+        "role": "student",
+        "created_at": "2024-12-22T10:00:00.000Z"
+    },
+    {
+        "_id": "676785a9b1234567890abcd5",
+        "name": "Sarah Johnson",
+        "email": "sarah.j@example.com",
+        "password": "student123",
+        "role": "student",
+        "created_at": "2024-12-22T11:00:00.000Z"
+    },
+    {
+        "_id": "676785a9b1234567890abcd6",
+        "name": "Mike Wilson",
+        "email": "mike.w@example.com",
+        "password": "staff123",
+        "role": "staff",
+        "created_at": "2024-12-22T11:30:00.000Z"
+    }
+]

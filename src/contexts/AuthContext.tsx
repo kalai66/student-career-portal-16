@@ -1,9 +1,8 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Session, User } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { demoCredentials } from '@/data/demoCredentials';
+import { Profile } from '@/lib/auth';
+import * as authLib from '@/lib/auth';
+import { getCurrentSession, Session } from '@/lib/auth';
 
 // Define UserRole enum for better type safety
 export enum UserRole {
@@ -14,7 +13,7 @@ export enum UserRole {
 }
 
 interface AuthContextType {
-  currentUser: User | null;
+  currentUser: Profile | null;
   session: Session | null;
   userRole: string | null;
   login: (email: string, password: string) => Promise<boolean>;
@@ -27,194 +26,88 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<Profile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setCurrentUser(session?.user ?? null);
-        
-        // Fetch user role after session changes (with setTimeout for safety)
-        if (session?.user) {
-          setTimeout(() => {
-            fetchUserRole(session.user.id);
-          }, 0);
-        } else {
-          setUserRole(null);
+    // Check for existing session
+    const initAuth = async () => {
+      try {
+        const existingSession = getCurrentSession();
+        if (existingSession) {
+          setSession(existingSession);
+          setCurrentUser(existingSession.user);
+          setUserRole(existingSession.user.role);
         }
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+      } finally {
+        setLoading(false);
       }
-    );
+    };
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setCurrentUser(session?.user ?? null);
-      
-      if (session?.user) {
-        fetchUserRole(session.user.id);
-      }
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    initAuth();
   }, []);
-
-  const fetchUserRole = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', userId)
-        .single();
-      
-      if (error) {
-        console.error('Error fetching user role:', error);
-        toast({
-          title: "Error",
-          description: "Could not fetch user role. Please try logging in again.",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      if (data) {
-        setUserRole(data.role);
-      }
-    } catch (error) {
-      console.error('Failed to fetch user role:', error);
-    }
-  };
 
   const isSuperAdmin = () => {
     // Check if this is the specific super admin email/credential
     if (currentUser?.email === 'blue67388@gmail.com') {
       return true;
     }
-    
+
     // Or check for the role
-    return userRole === UserRole.SUPER_ADMIN || 
-           (currentUser?.user_metadata?.role === 'super_admin');
+    return userRole === UserRole.SUPER_ADMIN ||
+      currentUser?.role === 'super_admin';
   };
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      // Special check for super admin
-      if (email === 'blue67388@gmail.com' && password === 'superadmin@123') {
-        // Create a mock super admin user and session
-        const mockUser = {
-          id: 'super-admin-id',
-          email: 'blue67388@gmail.com',
-          app_metadata: {},
-          user_metadata: { name: 'Super Admin', role: 'super_admin' },
-          aud: "authenticated",
-          created_at: new Date().toISOString()
-        } as User;
+      console.log('🔐 Attempting login:', email);
 
-        const mockSession = {
-          access_token: "super_admin_access_token",
-          refresh_token: "super_admin_refresh_token",
-          expires_in: 3600,
-          expires_at: Math.floor(Date.now() / 1000) + 3600,
-          user: mockUser
-        } as unknown as Session;
+      // Use the login function from auth.ts
+      const result = await authLib.login(email, password);
+      console.log('✅ Login result:', result);
 
-        setCurrentUser(mockUser);
-        setSession(mockSession);
-        setUserRole(UserRole.SUPER_ADMIN);
+      if (result) {
+        setCurrentUser(result.user);
+        setSession(result.session);
+        setUserRole(result.user.role);
+
+        console.log('✅ User authenticated:', {
+          name: result.user.name,
+          email: result.user.email,
+          role: result.user.role
+        });
 
         toast({
           title: "Login successful",
-          description: `Logged in as Super Admin.`,
+          description: `Welcome ${result.user.name}!`,
         });
         return true;
       }
 
-      // Check if the credentials match one of our demo users
-      const demoUser = Object.values(demoCredentials).find(
-        user => user.email === email && user.password === password
-      );
-
-      if (demoUser) {
-        // Create a mock user and session for demo purposes
-        const mockUser = {
-          id: demoUser.id,
-          email: demoUser.email,
-          app_metadata: {},
-          user_metadata: { name: demoUser.name, role: demoUser.role },
-          aud: "authenticated",
-          created_at: new Date().toISOString()
-        } as User;
-
-        const mockSession = {
-          access_token: "demo_access_token",
-          refresh_token: "demo_refresh_token",
-          expires_in: 3600,
-          expires_at: Math.floor(Date.now() / 1000) + 3600,
-          user: mockUser
-        } as unknown as Session;
-
-        setCurrentUser(mockUser);
-        setSession(mockSession);
-        setUserRole(demoUser.role);
-
-        toast({
-          title: "Login successful",
-          description: `Logged in as ${demoUser.role} using ${email === 'achu73220@gmail.com' ? 'real admin' : 'demo'} account.`,
-        });
-        return true;
-      }
-
-      // If not a demo user, proceed with real auth
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      toast({
+        title: "Login failed",
+        description: "Invalid credentials",
+        variant: "destructive",
       });
-
-      if (error) {
-        console.error('Login error:', error.message);
-        toast({
-          title: "Login failed",
-          description: error.message,
-          variant: "destructive",
-        });
-        throw error;
-      }
-
-      if (data.session) {
-        toast({
-          title: "Login successful",
-          description: "Redirecting to your dashboard...",
-        });
-        return true;
-      }
-
       return false;
     } catch (error) {
-      throw error;
+      console.error('❌ Login error:', error);
+      toast({
+        title: "Login failed",
+        description: error instanceof Error ? error.message : "An error occurred",
+        variant: "destructive",
+      });
+      return false;
     }
   };
 
   const logout = async () => {
     try {
-      // Clear our demo user session if it exists
-      if (currentUser && Object.values(demoCredentials).some(demo => demo.id === currentUser.id)) {
-        setCurrentUser(null);
-        setSession(null);
-        setUserRole(null);
-        toast({
-          title: "Logged out",
-          description: "You have been successfully logged out from account.",
-        });
-        return;
-      }
-
-      // Otherwise use supabase logout
-      await supabase.auth.signOut();
+      await authLib.logout();
       setCurrentUser(null);
       setSession(null);
       setUserRole(null);
@@ -234,30 +127,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateCredentials = async (email: string, password: string) => {
     try {
-      const { error: emailError } = await supabase.auth.updateUser({ email });
-      
-      if (emailError) {
-        toast({
-          title: "Failed to update email",
-          description: emailError.message,
-          variant: "destructive",
-        });
-        return;
+      if (!currentUser) {
+        throw new Error('No user logged in');
       }
-      
+
+      // Update in database
+      const { updateUser, updatePassword } = await import('@/lib/auth');
+
+      if (email !== currentUser.email) {
+        await updateUser(currentUser._id, { email });
+      }
+
       if (password) {
-        const { error: passwordError } = await supabase.auth.updateUser({ password });
-        
-        if (passwordError) {
-          toast({
-            title: "Failed to update password",
-            description: passwordError.message,
-            variant: "destructive",
-          });
-          return;
-        }
+        await updatePassword(currentUser._id, password);
       }
-      
+
+      // Update current user state
+      const updatedUser = { ...currentUser, email };
+      setCurrentUser(updatedUser);
+
+      // Update session
+      if (session) {
+        const updatedSession = { ...session, user: updatedUser };
+        setSession(updatedSession);
+        localStorage.setItem('current_session', JSON.stringify(updatedSession));
+      }
+
       toast({
         title: "Credentials updated",
         description: "Your account information has been updated successfully.",
@@ -266,7 +161,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Error updating credentials:', error);
       toast({
         title: "Update failed",
-        description: "An unexpected error occurred",
+        description: error.message || "An unexpected error occurred",
         variant: "destructive",
       });
     }
